@@ -42,7 +42,7 @@ jobs:
       
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
       
@@ -103,21 +103,40 @@ jobs:
           malware_block: 'false'
           environment_name: PROD
 
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macro-deck-${{ inputs.version }}-win
+          path: setup\Result\macro-deck-${{ inputs.version }}-win.exe
+          if-no-files-found: error
+
+  release-windows-installer:
+    name: Release Windows Installer
+    runs-on: ubuntu-latest
+    needs: build-windows-installer
+
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macro-deck-${{ inputs.version }}-win
+          path: setup/Result
+
       - name: Calculate File Size and Hash
         id: filehash
         run: |
-          $filehash = Get-FileHash -Algorithm SHA256 -Path "setup\Result\macro-deck-${{ inputs.version }}-win.exe" | ForEach-Object Hash
+          $filehash = Get-FileHash -Algorithm SHA256 -Path "setup/Result/macro-deck-${{ inputs.version }}-win.exe" | ForEach-Object Hash
           echo "FILE_HASH=$filehash".ToLower() | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          $filesize = (Get-Item "setup\Result\macro-deck-${{ inputs.version }}-win.exe").Length
+          $filesize = (Get-Item "setup/Result/macro-deck-${{ inputs.version }}-win.exe").Length
           echo "FILE_SIZE=$filesize" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
         shell: pwsh
 
       - name: Upload Windows installer to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: './setup/Result/macro-deck-${{ inputs.version }}-win.exe'
           tag_name: "v${{ inputs.version }}"
-      
+
       - name: Push Update to the API
         uses: Macro-Deck-App/Actions/push-to-update-api@main
         with:
