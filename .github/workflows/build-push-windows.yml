@@ -9,6 +9,10 @@ on:
       version:
         required: true
         type: string
+      sign:
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       branch:
@@ -20,12 +24,18 @@ on:
         required: true
         type: string
         description: 'The version to build'
+      sign:
+        required: false
+        type: boolean
+        description: 'Sign executables with eSigner'
+        default: true
 
 jobs:
   build-windows-installer:
     name: Build Windows Installer
     runs-on: windows-latest
-    
+    environment: production
+
     env:
       ISCC_PATH: 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
       INNO_SETUP_DIR: 'C:\Program Files (x86)\Inno Setup 6'
@@ -59,12 +69,40 @@ jobs:
             dotnet publish "src\MacroDeck\MacroDeck.csproj" -c Release -o "src\MacroDeck\bin\Publish" -r win-x64 --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true
             copy "src\MacroDeck\bin\Release\Macro Deck 2.dll" "src\MacroDeck\bin\Publish"
         shell: cmd
-        
+
+      - name: Sign Macro Deck executable
+        if: ${{ inputs.sign }}
+        uses: sslcom/esigner-codesign@develop
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ github.workspace }}\src\MacroDeck\bin\Publish\Macro Deck 2.exe
+          override: 'true'
+          malware_block: 'false'
+          environment_name: PROD
+
       - name: Build Macro Deck installer for Windows
         run: |
             "${{ env.ISCC_PATH }}" /D"ApplicationVersion=${{ inputs.version }}" /F"macro-deck-${{ inputs.version }}-win" "setup\Macro Deck.iss"
         shell: cmd
-      
+
+      - name: Sign Macro Deck installer
+        if: ${{ inputs.sign }}
+        uses: sslcom/esigner-codesign@develop
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ github.workspace }}\setup\Result\macro-deck-${{ inputs.version }}-win.exe
+          override: 'true'
+          malware_block: 'false'
+          environment_name: PROD
+
       - name: Calculate File Size and Hash
         id: filehash
         run: |
